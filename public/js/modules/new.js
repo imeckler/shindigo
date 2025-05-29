@@ -43,6 +43,7 @@ function newEventForm() {
             eventURL: "",
             hostName: "",
             creatorEmail: "",
+            creatorPhone: "",
             eventGroupID: "",
             eventGroupEditToken: "",
             publicCheckbox: false,
@@ -89,8 +90,20 @@ function newEventForm() {
                 this.$refs.magicLinkToken.value,
             );
             try {
+                // Get the verification token if available
+                const verificationToken = localStorage.getItem('phone_verification_token');
+                console.log('Sending with verification token:', verificationToken);
+                
+                // Prepare headers - don't set Content-Type as it's set automatically for FormData
+                const headers = {};
+                if (verificationToken) {
+                    headers['X-Phone-Verification'] = verificationToken;
+                    console.log('Added X-Phone-Verification header');
+                }
+                
                 const response = await fetch("/event", {
                     method: "POST",
+                    headers: headers,
                     body: formData,
                 });
                 this.submitting = false;
@@ -149,8 +162,20 @@ function newEventGroupForm() {
                 this.$refs.magicLinkToken.value,
             );
             try {
+                // Get the verification token if available
+                const verificationToken = localStorage.getItem('phone_verification_token');
+                console.log('Sending with verification token:', verificationToken);
+                
+                // Prepare headers - don't set Content-Type as it's set automatically for FormData
+                const headers = {};
+                if (verificationToken) {
+                    headers['X-Phone-Verification'] = verificationToken;
+                    console.log('Added X-Phone-Verification header');
+                }
+                
                 const response = await fetch("/group", {
                     method: "POST",
+                    headers: headers,
                     body: formData,
                 });
                 this.submitting = false;
@@ -168,7 +193,21 @@ function newEventGroupForm() {
                     return;
                 }
                 const json = await response.json();
-                window.location.assign(json.url);
+                
+                // Check if verification is required - show modal if needed
+                if (json.requireVerification && json.verificationData) {
+                    const { phoneNumber, eventID, type, attendeeID, editToken } = json.verificationData;
+                    
+                    // Use the global showPhoneVerificationModal function
+                    window.showPhoneVerificationModal(phoneNumber, eventID, type, attendeeID, editToken);
+                } else {
+                    // Store the verification token if provided
+                    if (json.verificationToken) {
+                        localStorage.setItem('phone_verification_token', json.verificationToken);
+                    }
+                    
+                    window.location.assign(json.url);
+                }
             } catch (error) {
                 console.log(error);
                 this.errors = unexpectedError;
@@ -201,8 +240,20 @@ function importEventForm() {
                 this.$refs.magicLinkToken.value,
             );
             try {
+                // Get the verification token if available
+                const verificationToken = localStorage.getItem('phone_verification_token');
+                console.log('Sending with verification token:', verificationToken);
+                
+                // Prepare headers - don't set Content-Type as it's set automatically for FormData
+                const headers = {};
+                if (verificationToken) {
+                    headers['X-Phone-Verification'] = verificationToken;
+                    console.log('Added X-Phone-Verification header');
+                }
+                
                 const response = await fetch("/import/event", {
                     method: "POST",
+                    headers: headers,
                     body: formData,
                 });
                 this.submitting = false;
@@ -216,7 +267,21 @@ function importEventForm() {
                     return;
                 }
                 const json = await response.json();
-                window.location.assign(json.url);
+                
+                // Check if verification is required - show modal if needed
+                if (json.requireVerification && json.verificationData) {
+                    const { phoneNumber, eventID, type, attendeeID, editToken } = json.verificationData;
+                    
+                    // Use the global showPhoneVerificationModal function
+                    window.showPhoneVerificationModal(phoneNumber, eventID, type, attendeeID, editToken);
+                } else {
+                    // Store the verification token if provided
+                    if (json.verificationToken) {
+                        localStorage.setItem('phone_verification_token', json.verificationToken);
+                    }
+                    
+                    window.location.assign(json.url);
+                }
             } catch (error) {
                 console.log(error);
                 this.errors = unexpectedError;

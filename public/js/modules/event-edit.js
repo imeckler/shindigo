@@ -83,17 +83,43 @@ function editEventForm() {
             );
             formData.append("editToken", window.eventData.editToken);
             try {
+                // Get the verification token
+                const verificationToken = localStorage.getItem('phone_verification_token');
+                
+                // Prepare headers
+                const headers = {};
+                if (verificationToken) {
+                    headers['X-Phone-Verification'] = verificationToken;
+                }
+                
                 const response = await fetch(`/event/${window.eventData.id}`, {
                     method: "PUT",
+                    headers: headers,
                     body: formData,
                 });
                 this.submitting = false;
                 if (!response.ok) {
+                    const json = await response.json();
+                    console.log('Error response:', json);
+                    
+                    // Handle verification required error
+                    if (response.status === 403 && json.requiresVerification) {
+                        // Close edit modal
+                        $('#editModal').modal('hide');
+                        
+                        // Phone number verification required
+                        alert('Phone verification is required. You will now be asked to verify your phone number.');
+                        
+                        // Redirect to the event page which will handle verification
+                        window.location.href = `/${window.eventData.id}?e=${window.eventData.editToken}&require_verification=true`;
+                        return;
+                    }
+                    
                     if (response.status !== 400) {
                         this.errors = unexpectedError;
                         return;
                     }
-                    const json = await response.json();
+                    
                     this.errors = json.errors;
                     // Set Bootstrap validation classes using 'field' property
                     $("input, textarea").removeClass("is-invalid");

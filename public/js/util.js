@@ -33,6 +33,20 @@ const removeStoredToken = function (eventID) {
     }
 };
 
+// Get the phone verification token from localStorage
+const getPhoneVerificationToken = function() {
+    return localStorage.getItem('phone_verification_token');
+};
+
+// Add the phone verification token to AJAX requests
+$(document).ajaxSend(function(event, jqxhr, settings) {
+    // If there's a phone verification token, add it as a header
+    const token = getPhoneVerificationToken();
+    if (token) {
+        jqxhr.setRequestHeader('X-Phone-Verification', token);
+    }
+});
+
 const unexpectedError = [
     { message: "An unexpected error has occurred. Please try again later." },
 ];
