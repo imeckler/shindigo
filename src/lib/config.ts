@@ -10,6 +10,15 @@ interface StaticPage {
     filename: string;
 }
 
+export interface TwilioConfig {
+    account_sid: string;
+    auth_token: string;
+    verify_service_sid: string;
+    messaging_service_sid: string;
+    phone_number: string;
+    phone_verification_required: boolean;
+}
+
 export interface GathioConfig {
     general: {
         domain: string;
@@ -37,6 +46,7 @@ export interface GathioConfig {
     sendgrid?: {
         api_key: string;
     };
+    twilio?: TwilioConfig;
     static_pages?: StaticPage[];
 }
 
@@ -48,6 +58,7 @@ interface FrontendConfig {
     showKofi: boolean;
     showPublicEventList: boolean;
     showInstanceInformation: boolean;
+    showLoginButton: boolean;
     staticPages?: StaticPage[];
     version: string;
 }
@@ -82,6 +93,7 @@ export const frontendConfig = (res: Response): FrontendConfig => {
             showPublicEventList: defaultConfig.general.show_public_event_list,
             showKofi: defaultConfig.general.show_kofi,
             showInstanceInformation: false,
+            showLoginButton: true,
             staticPages: [],
             version: process.env.npm_package_version || "unknown",
         };
@@ -94,6 +106,7 @@ export const frontendConfig = (res: Response): FrontendConfig => {
         showPublicEventList: !!config.general.show_public_event_list,
         showKofi: !!config.general.show_kofi,
         showInstanceInformation: !!config.static_pages?.length,
+        showLoginButton: !!config.general.showSidebar,
         staticPages: config.static_pages,
         version: process.env.npm_package_version || "unknown",
     };
@@ -108,16 +121,23 @@ export const instanceRules = (): InstanceRule[] => {
     const config = getConfig();
     const rules = [];
     rules.push(
+            {
+                text: "Log in by SMS",
+                icon: "fas fa-mobile",
+            }
+    );
+    rules.push(
         config.general.show_public_event_list
             ? {
                 text: "Public events and groups are displayed on the homepage",
                 icon: "fas fa-eye",
             }
             : {
-                text: "Events and groups can only be accessed by direct link",
+                text: "Events can only be accessed by direct link",
                 icon: "fas fa-eye-slash",
             },
     );
+    /*
     rules.push(
         config.general.creator_email_addresses?.length
             ? {
@@ -129,6 +149,7 @@ export const instanceRules = (): InstanceRule[] => {
                 icon: "fas fa-users",
             },
     );
+    */
     rules.push(
         config.general.delete_after_days > 0
             ? {
@@ -141,6 +162,13 @@ export const instanceRules = (): InstanceRule[] => {
             },
     );
     rules.push(
+        {
+            text: "Open source and self-hostable, so you're in control",
+            icon: "fas fa-check-square",
+        }
+    );
+    /*
+    rules.push(
         config.general.is_federated
             ? {
                 text: "This instance federates with other instances using ActivityPub",
@@ -151,6 +179,7 @@ export const instanceRules = (): InstanceRule[] => {
                 icon: "fas fa-globe",
             },
     );
+    */
     return rules;
 };
 
