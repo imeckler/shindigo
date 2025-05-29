@@ -23,6 +23,9 @@ import path from "path";
 import { activityPubContentType } from "./lib/activitypub.js";
 import { hashString } from "./util/generator.js";
 import { EmailService } from "./lib/email.js";
+import { requirePhoneVerification } from "./lib/middleware/verificationCheck.js";
+import eventReminderService from "./lib/eventReminders.js";
+import { getVerifiedPhoneFromRequest } from './lib/tokenService.js';
 
 const config = getConfig();
 const domain = config.general.domain;
@@ -151,6 +154,95 @@ schedule.scheduleJob("59 23 * * *", function (fireDate) {
 });
 
 // BACKEND ROUTES
+// API endpoint to unattend an event using phone verification
+router.delete("/api/unattend/:eventID", async (req, res) => {
+    try {
+        // Get the verification token from cookie or header
+        const verificationToken = 
+            req.cookies?.phone_verification || 
+            req.headers['x-phone-verification'];
+        
+        // Get the token service to extract phone number
+        const { getVerifiedPhoneFromToken } = await import('./lib/tokenService.js');
+        
+        // Get the verified phone number
+        const verifiedPhone = getVerifiedPhoneFromToken(verificationToken);
+        if (!verifiedPhone) {
+            return res.status(403).json({
+                error: "Phone verification required",
+                requiresVerification: true
+            });
+        }
+        
+        // Find the event
+        const event = await Event.findOne({ id: req.params.eventID });
+        if (!event) {
+            return res.status(404).json({ error: "Event not found" });
+        }
+        
+        // Find attendee with matching phone number
+        const attendee = event.attendees?.find(
+            a => a.phoneNumber === verifiedPhone && a.status === "attending"
+        );
+        
+        if (!attendee) {
+            return res.status(404).json({
+                error: "No attendee found with your verified phone number",
+            });
+        }
+        
+        const attendeeEmail = attendee.email;
+        const attendeeId = attendee._id;
+        
+        // Remove the attendee
+        const removalResponse = await Event.updateOne(
+            { id: req.params.eventID },
+            { $pull: { attendees: { _id: attendeeId } } }
+        );
+        
+        // Get updated event and reschedule reminders
+        const updatedEvent = await Event.findOne({ id: req.params.eventID });
+        if (updatedEvent) {
+            await eventReminderService.scheduleReminders(updatedEvent);
+        }
+        
+        addToLog(
+            "phoneUnattendEvent",
+            "success",
+            `Attendee removed self using phone verification from event ${req.params.eventID}`
+        );
+        
+        if (attendeeEmail) {
+            req.emailService.sendEmailFromTemplate({
+                to: attendeeEmail,
+                subject: "You have been removed from an event",
+                templateName: "unattendEvent",
+                templateData: {
+                    eventID: req.params.eventID,
+                }
+            }).catch((e) => {
+                console.error('Error sending unattend email:', e.toString());
+            });
+        }
+        
+        // Return success with specific message
+        return res.status(200).json({ 
+            success: true,
+            message: "You have been successfully removed from the event"
+        });
+    } catch (error) {
+        console.error('Error in unattend by phone:', error);
+        addToLog(
+            "phoneUnattendEvent",
+            "error",
+            `Attempt to remove attendee with phone verification from event ${req.params.eventID} failed with error: ${error}`
+        );
+        return res.status(500).json({
+            error: "There has been an unexpected error. Please try again."
+        });
+    }
+});
+
 router.post("/verifytoken/event/:eventID", (req, res) => {
     Event.findOne({
         id: req.params.eventID,
@@ -562,10 +654,34 @@ router.post("/attendee/provision", async (req, res) => {
 });
 
 router.post("/attendevent/:eventID", async (req, res) => {
-    // Do not allow empty removal passwords
-    if (!req.body.removalPassword) {
-        return res.sendStatus(500);
+  // Do not allow empty removal passwords (still needed for email-based unattend links)
+  if (!req.body.removalPassword) {
+      return res.sendStatus(500);
+  }
+
+    // Get the verification token from cookie or header
+    const verificationToken = 
+        req.cookies?.phone_verification || 
+        req.headers['x-phone-verification'];
+
+    const { getVerifiedPhoneFromToken, getVerifiedUser } = await import('./lib/tokenService.js');
+    
+    // Get the verified phone number
+    const verifiedPhone = getVerifiedPhoneFromToken(verificationToken);
+    if (!verifiedPhone) {
+        return res.status(403).json({
+            error: "Phone verification required",
+            requiresVerification: true
+        });
     }
+    const verifiedUser = await getVerifiedUser(verifiedPhone);
+    if (!verifiedUser) {
+        return res.status(403).json({
+            error: "User not found",
+            requiresVerification: true
+        });
+    }
+    
     const event = await Event.findOne({ id: req.params.eventID }).catch((e) => {
         addToLog(
             "attendEvent",
@@ -577,6 +693,16 @@ router.post("/attendevent/:eventID", async (req, res) => {
         );
         return res.sendStatus(500);
     });
+    
+    // Prevent creator from attending their own event with the same phone
+    if (event && config.twilio?.phone_verification_required && 
+        event.creatorPhone &&
+        event.creatorPhone === verifiedPhone) {
+        return res.status(400).json({
+            error: "You cannot attend your own event using the same phone number that was used to create it",
+            isCreatorPhone: true
+        });
+    }
     if (!event) {
         return res.sendStatus(404);
     }
@@ -586,6 +712,7 @@ router.post("/attendevent/:eventID", async (req, res) => {
     if (!attendee) {
         return res.sendStatus(404);
     }
+
     // Do we have enough free spots in this event to accomodate this attendee?
     // First, check if the event has a max number of attendees
     if (event.maxAttendees !== null && event.maxAttendees !== undefined) {
@@ -609,17 +736,19 @@ router.post("/attendevent/:eventID", async (req, res) => {
         {
             $set: {
                 "attendees.$.status": "attending",
-                "attendees.$.name": req.body.attendeeName,
-                "attendees.$.email": req.body.attendeeEmail,
+                "attendees.$.name": verifiedUser.name,
+                "attendees.$.email": verifiedUser.email,
+                "attendees.$.phoneNumber": verifiedPhone,
                 "attendees.$.number": req.body.attendeeNumber,
                 "attendees.$.visibility": req.body.attendeeVisible
                     ? "public"
                     : "private",
             },
         },
+        { new: true } // Return the updated document
     )
-        .then((event) => {
-            if (!event) {
+        .then(async (updatedEvent) => {
+            if (!updatedEvent) {
                 return res.sendStatus(404);
             }
 
@@ -628,10 +757,14 @@ router.post("/attendevent/:eventID", async (req, res) => {
                 "success",
                 "Attendee added to event " + req.params.eventID,
             );
+            
+            // Reschedule reminders when attendee is confirmed
+            await eventReminderService.scheduleReminders(updatedEvent);
+            
             if (req.body.attendeeEmail) {          
                 req.emailService.sendEmailFromTemplate({
                     to: req.body.attendeeEmail,
-                    subject: `You're RSVPed to ${event.name}`,
+                    subject: `You're RSVPed to ${updatedEvent.name}`,
                     templateName: "addEventAttendee",
                     templateData:{
                         eventID: req.params.eventID,
@@ -645,6 +778,60 @@ router.post("/attendevent/:eventID", async (req, res) => {
                     res.status(500).end();
                 });
             }
+            
+            // Check if phone verification is required and phone number is provided
+          /*
+            if (config.twilio && config.twilio.phone_verification_required && req.body.attendeePhone) {
+                // Find the updated attendee
+                const updatedAttendee = updatedEvent.attendees.find(
+                    (a) => a.removalPassword === req.body.removalPassword
+                );
+                
+                if (updatedAttendee) {
+                    try {
+                        // Send verification code and show verification page
+                        const twilioService = await import('./lib/twilio.js').then(m => m.default);
+                        await twilioService.sendVerificationCode(
+                            updatedAttendee.phoneNumber,
+                            req.params.eventID,
+                            { type: 'attendee', id: updatedAttendee._id.toString() }
+                        );
+                        
+                        // Store user data for later use
+                        const { storeVerifiedUser } = await import('./lib/tokenService.js');
+                        try {
+                            await storeVerifiedUser(
+                                updatedAttendee.phoneNumber,
+                                updatedAttendee.name,
+                                updatedAttendee.email
+                            );
+                        } catch (storeErr) {
+                            console.error('Error storing user data:', storeErr);
+                            // Continue even if storing fails
+                        }
+                        
+                        // Instead of rendering the page, send JSON with verification info
+                        return res.json({
+                            success: true,
+                            message: "Verification code sent",
+                            verification: {
+                                eventID: req.params.eventID,
+                                attendeeID: updatedAttendee._id.toString(),
+                                phoneNumber: updatedAttendee.phoneNumber,
+                                type: 'attendee',
+                                name: updatedAttendee.name,
+                                email: updatedAttendee.email
+                            }
+                        });
+                    } catch (error) {
+                        console.error('Error sending verification code:', error);
+                        return res.redirect(`/${req.params.eventID}?verificationError=true`);
+                    }
+                }
+            }
+          */
+            
+            // No verification needed or error - redirect to event page
             res.redirect(`/${req.params.eventID}`);
         })
         .catch((error) => {
@@ -675,11 +862,16 @@ router.get("/oneclickunattendevent/:eventID/:attendeeID", (req, res) => {
     Event.findOneAndUpdate(
         { id: req.params.eventID },
         { $pull: { attendees: { _id: req.params.attendeeID } } },
+        { new: true }
     )
-        .then((event) => {
+        .then(async (event) => {
             if (!event) {
                 return res.sendStatus(404);
             }
+            
+            // Reschedule reminders after attendee removal
+            await eventReminderService.scheduleReminders(event);
+            
             addToLog(
                 "oneClickUnattend",
                 "success",
@@ -717,15 +909,20 @@ router.get("/oneclickunattendevent/:eventID/:attendeeID", (req, res) => {
         });
 });
 
-router.post("/removeattendee/:eventID/:attendeeID", (req, res) => {
+router.post("/removeattendee/:eventID/:attendeeID", requirePhoneVerification, (req, res) => {
     Event.findOneAndUpdate(
         { id: req.params.eventID },
         { $pull: { attendees: { _id: req.params.attendeeID } } },
+        { new: true }
     )
-        .then((event) => {
+        .then(async (event) => {
             if (!event) {
                 return res.sendStatus(404);
             }
+            
+            // Reschedule reminders after attendee removal
+            await eventReminderService.scheduleReminders(event);
+            
             addToLog(
                 "removeEventAttendee",
                 "success",
@@ -847,9 +1044,18 @@ router.get("/unsubscribe/:eventGroupID", (req, res) => {
 
 router.post("/post/comment/:eventID", (req, res) => {
     let commentID = nanoid();
+    const verifiedUser = res.locals.verifiedUser;
+    if (!verifiedUser) {
+        return res.status(403).json({
+            error: "User not found",
+            requiresVerification: true
+        });
+    }
+    const author = verifiedUser.name;
+
     const newComment = {
         id: commentID,
-        author: req.body.commentAuthor,
+        author,
         content: req.body.commentContent,
         timestamp: moment(),
     };
@@ -880,7 +1086,7 @@ router.post("/post/comment/:eventID", (req, res) => {
                         name: `Comment on ${event.name}`,
                         type: "Note",
                         cc: "https://www.w3.org/ns/activitystreams#Public",
-                        content: `<p>${req.body.commentAuthor} commented: ${req.body.commentContent}.</p><p><a href="https://${domain}/${req.params.eventID}/">See the full conversation here.</a></p>`,
+                        content: `<p>${author} commented: ${req.body.commentContent}.</p><p><a href="https://${domain}/${req.params.eventID}/">See the full conversation here.</a></p>`,
                     };
                     broadcastCreateMessage(
                         jsonObject,
@@ -910,7 +1116,7 @@ router.post("/post/comment/:eventID", (req, res) => {
                                     templateName: "addEventComment",
                                     templateData:{
                                         eventID: req.params.eventID,
-                                        commentAuthor: req.body.commentAuthor,
+                                        commentAuthor: author,
                                     },
                                 }).catch((e) => {
                                     console.error('error sending removeEventAttendeeHtml email', e.toString());
@@ -942,11 +1148,19 @@ router.post("/post/comment/:eventID", (req, res) => {
 });
 
 router.post("/post/reply/:eventID/:commentID", (req, res) => {
+    const verifiedUser = res.locals.verifiedUser;
+    if (!verifiedUser) {
+        return res.status(403).json({
+            error: "User not found",
+            requiresVerification: true
+        });
+    }
+
     let replyID = nanoid();
     let commentID = req.params.commentID;
     const newReply = {
         id: replyID,
-        author: req.body.replyAuthor,
+        author: verifiedUser.name,
         content: req.body.replyContent,
         timestamp: moment(),
     };
@@ -979,7 +1193,7 @@ router.post("/post/reply/:eventID/:commentID", (req, res) => {
                         name: `Comment on ${event.name}`,
                         type: "Note",
                         cc: "https://www.w3.org/ns/activitystreams#Public",
-                        content: `<p>${req.body.replyAuthor} commented: ${req.body.replyContent}</p><p><a href="https://${domain}/${req.params.eventID}/">See the full conversation here.</a></p>`,
+                        content: `<p>${verifiedUser.name} commented: ${req.body.replyContent}</p><p><a href="https://${domain}/${req.params.eventID}/">See the full conversation here.</a></p>`,
                     };
                     broadcastCreateMessage(
                         jsonObject,
@@ -1008,7 +1222,7 @@ router.post("/post/reply/:eventID/:commentID", (req, res) => {
                                     templateName: "addEventComment",
                                     templateData: {
                                         eventID: req.params.eventID,
-                                        commentAuthor: req.body.replyAuthor,
+                                        commentAuthor: verifiedUser.name,
                                     },
                                 }).catch((e) => {
                                     console.error('error sending removeEventAttendeeHtml email', e.toString());
