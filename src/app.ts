@@ -9,7 +9,6 @@ import event from "./routes/event.js";
 import group from "./routes/group.js";
 import staticPages from "./routes/static.js";
 import magicLink from "./routes/magicLink.js";
-import phoneVerification from "./routes/phoneVerification.js";
 import verification from "./routes/verification.js";
 import {
     activityPubContentType,
@@ -86,7 +85,6 @@ app.use("/", activitypub);
 app.use("/", event);
 app.use("/", group);
 app.use("/", magicLink);
-app.use("/", phoneVerification);
 app.use("/", verification);
 app.use("/", routes);
 
