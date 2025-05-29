@@ -36,6 +36,9 @@
     <link rel="stylesheet" href="/css/bootstrap.min.css">
     <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
     <link rel="stylesheet" href="/css/style.css">
+    <link rel="stylesheet" href="/css/user-status.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/intl-tel-input@25.3.1/build/css/intlTelInput.css">
+    <link rel="stylesheet" href="https://use.typekit.net/dba2gil.css">
 
     <!-- JS -->
     <script src="/js/jquery-3.4.1.min.js"></script>
@@ -48,7 +51,9 @@
     <script src="//cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
     <script src="/js/moment-timezone.js"></script>
     <script src="/js/util.js"></script>
+    <script src="/js/attend-event.js"></script>
     <script src="//unpkg.com/alpinejs" defer></script>
+    <script src="//cdn.jsdelivr.net/npm/intl-tel-input@25.3.1/build/js/intlTelInput.min.js"></script>
 
   </head>
 
@@ -76,10 +81,19 @@
               {{/each}}
             </p>
           {{/if}}
+          {{#if false}}
           <p class="small text-muted">
             <strong>Gathio</strong> version {{version}} &middot; <a href="https://github.com/lowercasename/gathio">GitHub</a> &middot; Made with <i class="far fa-heart"></i> by <a href="https://raphaelkabo.com">Raphael</a> and <a href="https://github.com/lowercasename/gathio/graphs/contributors">contributors</a>
           </p>
+          {{/if}}
         </footer>
       </section>
-  </div>
+    </div>
+    
+    <!-- Sign In Modal -->
+    {{> signInModal}}
+    
+    <!-- User verification JS -->
+    <script src="/js/user-verification.js"></script>
+  </body>
 </html>

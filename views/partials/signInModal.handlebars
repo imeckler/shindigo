@@ -1,0 +1,88 @@
+<div class="modal fade" id="signInModal" tabindex="-1" role="dialog" aria-labelledby="signInModalLabel" aria-hidden="true">
+  <div class="modal-dialog" role="document">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="signInModalLabel">Sign In</h5>
+        <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+          <span aria-hidden="true">&times;</span>
+        </button>
+      </div>
+      <div class="modal-body">
+        <div id="signInStep1">
+          <p>Please enter your phone number to sign in:</p>
+          <form id="signInForm">
+            <div class="form-group">
+              <label for="signInPhone">Your phone number</label>
+              <p class="form-text small">Required for verification. You will receive a verification code via SMS.</p>
+              <input type="tel" class="form-control" id="signInPhone" name="phone" placeholder="Include country code (e.g. +1234567890)" required>
+            </div>
+            <!-- div class="form-group">
+              <label for="signInName">Your name (optional)</label>
+              <input type="text" class="form-control" id="signInName" name="name" placeholder="Enter your name">
+            </div>
+            <div class="form-group">
+              <label for="signInEmail">Your email (optional)</label>
+              <input type="email" class="form-control" id="signInEmail" name="email" placeholder="Enter your email">
+            </div -->
+            <div class="alert alert-danger mt-3" id="signInError" style="display:none;"></div>
+          </form>
+        </div>
+        
+        <div id="signInStep2" style="display:none;">
+          <p class="text-center">We've sent a verification code to <strong id="verificationPhoneNumber"></strong>.</p>
+          <p class="text-center">Please enter the code below to complete your verification.</p>
+          
+          <form id="verifyCodeForm">
+            <div class="form-group">
+              <label for="verificationCode">Verification Code</label>
+              <input type="text" class="form-control" id="verificationCode" name="verificationCode" placeholder="Enter the 6-digit code" required>
+              <input type="hidden" id="verificationType" name="type" value="general">
+            </div>
+            
+            <div id="verificationError" class="alert alert-danger mt-3" style="display:none;"></div>
+          </form>
+        </div>
+
+        <div id="signInStep3" style="display:none;">
+          <p class="text-center">Set user info</p>
+
+          <form id="userInfoForm">
+            <div class="form-group">
+              <input type="text" class="form-control" id="userInfoName" name="name" placeholder="Name" required>
+            </div>
+            <div id="userInfoError" class="alert alert-danger mt-3" style="display:none;"></div>
+          </form>
+        </div>
+
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="button button--secondary" data-dismiss="modal">Cancel</button>
+        
+        <!-- Step 1 buttons -->
+        <button type="button" class="button button--primary" id="sendVerificationBtn">Continue</button>
+        
+        <!-- Step 2 buttons -->
+        <button type="button" class="button button--outline-secondary" id="resendVerificationCode" style="display:none;">Resend Code</button>
+        <button class="button button--primary" id="submitVerificationCode" style="display:none;">Verify</button>
+
+        <!-- Step 3 buttons -->
+        <button type="button" class="button button--primary" id="setUserInfo" style="display:none;">Continue</button>
+
+        <button class="button button--primary" disabled="disabled" id="loaderButton" style="display:none;">
+          <div class="loader"></div>
+          <span id="loaderText"></span>
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+<script>
+$(document).ready(function() {
+  const input = document.querySelector("#signInPhone");
+  window.signInTel = window.intlTelInput(input, {
+    countryOrder: ['us'],
+    initialCountry: 'us',
+    loadUtils: () => import("https://cdn.jsdelivr.net/npm/intl-tel-input@25.3.1/build/js/utils.js"),
+  });
+});
+</script>

@@ -1,11 +1,29 @@
-<div class="sidebar-sticky-wrapper">
-    <h1><a href="/">gathio</a></h1>
+{{#if verifiedUser}}
+  <div class="sidebar-sticky-wrapper">
+        <div id="user-status-bar">
+          <div class="user-status-bar-container">
+            <h1><a href="/">shindigo</a></h1>
+            <div class="user-info">
+                <div class="user-details">
+                    <i class="fas fa-user-check"></i>
+                    <strong>{{verifiedUser.name}}</strong>
+                </div>
+                <a class="button button--primary" href="/new"><i class="far fa-calendar-plus"></i> Create</a>
+                <button id="clearVerification" class="button button--outline-secondary button--sm" title="Clear verification">
+                  <i class="fas fa-sign-out-alt"></i> Sign out
+                </button>
+            </div>
+          </div>
+        </div>
 
-    <ul id="sidebar__nav">
-        <li><a class="button button--primary" href="/new"><i class="far fa-calendar-plus"></i> Create an event</a></li>
-        {{#if showPublicEventList}}
-            <li><a href="/events">View events</a></li>
-            <li><a href="/about">About</a></li>
-        {{/if}}
-    </ul>
-</div>
+      {{#if false}}
+        <ul id="sidebar__nav">
+            <li><a class="button button--primary" href="/new"><i class="far fa-calendar-plus"></i> Create an event</a></li>
+            {{#if showPublicEventList}}
+                <li><a href="/events">View events</a></li>
+                <li><a href="/about">About</a></li>
+            {{/if}}
+        </ul>
+      {{/if}}
+  </div>
+{{/if}}
