@@ -11,6 +11,7 @@ export interface IEventGroup extends mongoose.Document {
     image?: string;
     url?: string;
     creatorEmail?: string;
+    creatorPhone?: string;
     hostName?: string;
     editToken?: string;
     firstLoad?: boolean;
@@ -51,6 +52,10 @@ const EventGroupSchema = new mongoose.Schema({
         trim: true,
     },
     creatorEmail: {
+        type: String,
+        trim: true,
+    },
+    creatorPhone: {
         type: String,
         trim: true,
     },

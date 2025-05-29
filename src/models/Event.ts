@@ -4,6 +4,9 @@ export interface IAttendee {
     name: string;
     status?: string;
     email?: string;
+    phoneNumber?: string;
+    phoneVerified?: boolean;
+    verificationCode?: string;
     removalPassword?: string;
     id?: string;
     number?: number;
@@ -55,6 +58,7 @@ export interface IEvent extends mongoose.Document {
     image?: string;
     url?: string;
     creatorEmail?: string;
+    creatorPhone?: string;
     hostName?: string;
     viewPassword?: string;
     editPassword?: string;
@@ -86,6 +90,18 @@ const Attendees = new mongoose.Schema({
         trim: true,
     },
     email: {
+        type: String,
+        trim: true,
+    },
+    phoneNumber: {
+        type: String,
+        trim: true,
+    },
+    phoneVerified: {
+        type: Boolean,
+        default: false,
+    },
+    verificationCode: {
         type: String,
         trim: true,
     },
@@ -270,6 +286,10 @@ const EventSchema = new mongoose.Schema({
         trim: true,
     },
     creatorEmail: {
+        type: String,
+        trim: true,
+    },
+    creatorPhone: {
         type: String,
         trim: true,
     },

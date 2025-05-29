@@ -9,12 +9,15 @@ import event from "./routes/event.js";
 import group from "./routes/group.js";
 import staticPages from "./routes/static.js";
 import magicLink from "./routes/magicLink.js";
+import phoneVerification from "./routes/phoneVerification.js";
+import verification from "./routes/verification.js";
 import {
     activityPubContentType,
     alternateActivityPubContentType,
 } from "./lib/activitypub.js";
 import { EmailService } from "./lib/email.js";
 import getConfig from "./lib/config.js";
+import { addUserToContext } from "./lib/middleware/userContext.js";
 
 const app = express();
 const config = getConfig();
@@ -24,6 +27,7 @@ const hbsInstance = createHandlebars({
     partialsDir: ["views/partials/"],
     layoutsDir: "views/layouts/",
     helpers: {
+        encodeURI: (s: string) => encodeURIComponent(s),
         plural: function (number: number, text: string) {
             const singular = number === 1;
             // If no text parameter was given, just return a conditional s.
@@ -41,7 +45,7 @@ const hbsInstance = createHandlebars({
         },
         json: function (context: object) {
             return JSON.stringify(context);
-        },
+        }
     },
 });
 
@@ -72,6 +76,9 @@ app.use(express.urlencoded({ extended: true }));
 // Cookies //
 app.use(cookieParser());
 
+// User context middleware - adds verified user to request if available
+app.use(addUserToContext);
+
 // Router //
 app.use("/", staticPages);
 app.use("/", frontend);
@@ -79,6 +86,8 @@ app.use("/", activitypub);
 app.use("/", event);
 app.use("/", group);
 app.use("/", magicLink);
+app.use("/", phoneVerification);
+app.use("/", verification);
 app.use("/", routes);
 
 export default app;
