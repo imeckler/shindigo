@@ -13,12 +13,13 @@
 
 body {
     color: var(--color--black);
+    font-family: "helvetica-neue-lt-pro", sans-serif;
 }
 
 h1,
 h2,
 h3 {
-    font-family: "Fredoka", sans-serif;
+    font-family: "helvetica-neue-lt-pro", sans-serif;
     font-weight: 400;
     font-optical-sizing: auto;
     font-weight: 400;
@@ -26,7 +27,7 @@ h3 {
 }
 
 .lead {
-    font-family: "Fredoka", sans-serif;
+    font-family: "helvetica-neue-lt-pro", sans-serif;
     font-weight: 300;
     font-optical-sizing: auto;
     font-style: normal;
@@ -88,12 +89,12 @@ h3 {
 }
 
 .button--primary {
-    background: var(--color-purple);
+    background: var(--color--black);
     color: #fff;
 }
 
 .button--primary:hover {
-    background: var(--color-purple-dark);
+    background: var(--color-grey-30);
     color: #fff;
 }
 
@@ -226,20 +227,27 @@ body {
 body > #container {
     min-height: 100vh;
     width: 100%;
-    max-width: 75rem;
+    max-width: 50rem;
+    /*
     display: grid;
-    margin: 0 auto;
     grid-template-columns: 1fr;
     grid-template-rows: min-content auto;
+    */
     padding: 0;
+    margin: 0 auto;
+  display: flex;
+  flex-direction: column;
 }
 
 #container > #content {
     overflow: hidden;
+    /*
     border: 1px solid var(--color-grey-90);
     background: #fff;
+    */
     display: flex;
     flex-direction: column;
+    padding: 0 1rem;
 }
 
 #container > #content > main {
@@ -250,9 +258,33 @@ body > #container {
     padding: 1rem;
 }
 
+#container > #content > .event > .event-details > .p-name {
+  font-family: 'helvetica-neue-lt-pro-cond';
+  border-bottom: 1px solid var(--color--black);
+}
+
+#container > #content > .event > .event-details > .p-datetime {
+  font-family: 'helvetica-neue-lt-pro';
+  text-transform: uppercase;
+  display: block;
+  font-style: italic;
+  font-size: 1rem;
+  font-weight: bold;
+}
+
+#container > #content > .event > .event-details > .p-location {
+  font-family: 'helvetica-neue-lt-pro';
+  text-transform: uppercase;
+  display: block;
+  font-weight: 300;
+  font-size: 1rem;
+}
+
+/*
 #container > #content > main.event > *:not(.event-header-image) {
     margin: 0 1rem;
 }
+*/
 
 #container > #content > footer {
     margin-top: auto;
@@ -274,8 +306,11 @@ body > #container {
         gap: 1rem;
     }
     #container > #content {
+      padding: 0 1rem;
+      /*
         border-radius: 1rem;
         box-shadow: 0 0 6px rgba(0, 0, 0, 0.1);
+        */
     }
     #container > #content > main.page {
         padding: 2rem;
@@ -291,26 +326,34 @@ body > #container {
 /* SIDEBAR */
 
 #sidebar h1 {
-    font-family: "Fredoka", sans-serif;
-    font-weight: 700;
+    font-family: "anultra-slab", sans-serif;
+    font-weight: 500;
     font-optical-sizing: auto;
     font-style: normal;
     text-align: center;
-    letter-spacing: -0.5px;
     font-size: 3rem;
+    /*
     color: transparent !important;
+    letter-spacing: -0.5px;
+    */
     margin-bottom: 1rem;
 }
 
 #sidebar h1 a {
+    color: #222a5c; /* try this #171f4f */
+  /*
     background: rgb(69, 69, 69);
     background-clip: text;
     -webkit-background-clip: text;
     color: transparent !important;
+    */
 }
 
 #sidebar h1 a:hover {
     text-decoration: none;
+    color: #626db5;
+    /* color: #a174c1; */
+    /*
     background: linear-gradient(
         to right,
         rgb(1, 76, 173),
@@ -321,6 +364,7 @@ body > #container {
     background-clip: text;
     -webkit-background-clip: text;
     color: transparent !important;
+    */
 }
 
 ul#sidebar__nav {
@@ -425,10 +469,8 @@ ul#sidebar__nav a {
 }
 
 #eventName {
-    padding: 0 0 0 10px;
-    width: 100%;
-    display: flex;
-    justify-content: space-between;
+  font-weight: bold;
+  font-size: 3rem;
 }
 
 #eventPrivacy {
@@ -781,3 +823,91 @@ article.static-page header {
     margin-bottom: 1rem;
     border-bottom: 1px solid #e0e0e0;
 }
+
+.blurred {
+  filter: blur(0.3rem);
+  user-select: none;
+  pointer-events: none;
+}
+
+.floating-card {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 10;
+  width: 300px;
+  padding: 20px;
+  border-radius: 1rem;
+  box-shadow: 0 0 10px rgba(0, 0, 0, 0.2);
+  background-color: white;
+}
+
+.loader {
+  border: 10px solid #f3f3f3; /* Light grey */
+  border-top: 10px solid #3498db; /* Blue */
+  border-radius: 50%;
+  height: 74%;
+  aspect-ratio: 1 / 1;
+  animation: spin 2s linear infinite;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.signInHome {
+}
+
+.upcoming-event .event-image {
+  width: 100%;
+}
+
+.upcoming-event {
+  position: relative;
+}
+
+.upcoming-event a {
+  text-decoration: none;
+}
+
+.upcoming-event .event-name {
+  font-family: 'helvetica-neue-lt-pro-cond';
+  border-bottom: 1px solid white;
+  color: white;
+  margin: 0;
+  font-size: 1.5rem;
+}
+
+.upcoming-event .event-details {
+  color: white;
+  background-color: black;
+  padding-left: 0.5rem;
+  padding-right: 0.5rem;
+  padding-top: 0.2rem;
+  padding-bottom: 0.2rem;
+}
+
+.upcoming-event .p-datetime {
+  text-transform: uppercase;
+  font-style: italic;
+  font-size: 1rem;
+  font-weight: bold;
+}
+
+.upcoming-events-header {
+  text-transform: uppercase;
+  font-size: 1.5rem;
+  border-bottom: 1px solid var(--color--black);
+}
+
+.upcoming-event:not(:last-child) {
+  padding-bottom: 1rem;
+  margin-bottom: 1rem;
+  border-bottom: 1px dashed var(--color--black);
+}
+
+/* go here https://css-loaders.com/spinner/
+ */
+
