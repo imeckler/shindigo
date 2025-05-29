@@ -6,9 +6,11 @@ import {
     frontendConfig,
     instanceDescription,
     instanceRules,
+    getConfig,
 } from "../lib/config.js";
 import { addToLog, exportICal } from "../helpers.js";
 import Event from "../models/Event.js";
+import { IEvent } from "../models/Event.js";
 import EventGroup, { IEventGroup } from "../models/EventGroup.js";
 import {
     acceptsActivityPub,
@@ -18,21 +20,52 @@ import MagicLink from "../models/MagicLink.js";
 import { getConfigMiddleware } from "../lib/middleware.js";
 import { getMessage } from "../util/messages.js";
 import { EventListEvent, bucketEventsByMonth } from "../lib/event.js";
+import { getVerifiedPhoneFromRequest } from '../lib/tokenService.js';
 
 const router = Router();
 
 // Add config middleware to all routes
 router.use(getConfigMiddleware);
 
-router.get("/", (_, res) => {
-    if (res.locals.config?.general.show_public_event_list) {
-        return res.redirect("/events");
-    }
-    return res.render("home", {
-        ...frontendConfig(res),
-        instanceRules: instanceRules(),
-        instanceDescription: instanceDescription(),
+router.get("/", async (req, res) => {
+  if (res.locals.config?.general.show_public_event_list) {
+      return res.redirect("/events");
+  }
+
+  const phone = getVerifiedPhoneFromRequest(req);
+
+  let events: IEvent[];
+  let hostingEvents: IEvent[];
+
+  if (phone == null) {
+    events = [];
+    hostingEvents = [];
+  } else {
+    events = await Event.find({
+      'attendees.phoneNumber': phone,
+    }).lean();
+    events.forEach((e) => {
+      (e as any).displayDate = shortDisplayDate(e);
     });
+
+    hostingEvents = await Event.find({
+      'creatorPhone': phone,
+    }).lean();
+    hostingEvents.forEach((e) => {
+      (e as any).displayDate = shortDisplayDate(e);
+    });
+
+    console.log(events.map((x) => JSON.stringify(x)));
+  }
+
+  return res.render("home", {
+      ...frontendConfig(res),
+      instanceRules: instanceRules(),
+      instanceDescription: instanceDescription(),
+      showLoginButton: res.locals.verifiedUser != null,
+      events,
+      hostingEvents,
+  });
 });
 
 router.get("/about", (_: Request, res: Response) => {
@@ -141,6 +174,46 @@ router.get("/events", async (_: Request, res: Response) => {
     });
 });
 
+function shortDisplayDate(event: {start: Date, end: Date, timezone: string}): string {
+  const start = moment.tz(event.start, event.timezone);
+  const fmt = `ddd MMM D, h${start.minutes() === 0 ? '' : ':mm'}A`
+  return start.format(fmt);
+}
+
+function getDisplayDate(event: {start: Date, end: Date, timezone: string}): string {
+  if (moment.tz(event.end, event.timezone).isSame(event.start, "day")) {
+      const currentYear = (new Date()).getFullYear();
+
+      const showYear = event.start.getFullYear() != currentYear;
+      const showMinute = (d: Date) => d.getMinutes() != 0;
+      const fmt = `dddd MMMM D${showYear ? ', YYYY' : ''}; h${showMinute(event.start) ? ':mm' : ''}a`;
+      // const fmt = () ? 'dddd MMMM D; h:mma' : 'dddd MMMM D, YYYY; h:mma';
+      // Happening during one day
+      return moment
+              .tz(event.start, event.timezone)
+              .format(
+                fmt
+                  // 'dddd MMMM D, YYYY; h:mma',
+              ) +
+          moment
+              .tz(event.end, event.timezone)
+              .format(
+                  ` [<span class="text-muted">&ndash;</span>] h${showMinute(event.end) ? ':mm' : ''}a [<span class="text-muted">](z)[</span>]`,
+              );
+  } else {
+      return moment
+              .tz(event.start, event.timezone)
+              .format(
+                  'dddd D MMMM YYYY [<span class="text-muted">at</span>] h:mm a',
+              ) +
+          moment
+              .tz(event.end, event.timezone)
+              .format(
+                  ' [<span class="text-muted">–</span>] dddd D MMMM YYYY [<span class="text-muted">at</span>] h:mm a [<span class="text-muted">](z)[</span>]',
+              );
+  }
+}
+
 router.get("/:eventID", async (req: Request, res: Response) => {
     try {
         const event = await Event.findOne({
@@ -152,33 +225,7 @@ router.get("/:eventID", async (req: Request, res: Response) => {
             return res.status(404).render("404", frontendConfig(res));
         }
         const parsedLocation = event.location.replace(/\s+/g, "+");
-        let displayDate;
-        if (moment.tz(event.end, event.timezone).isSame(event.start, "day")) {
-            // Happening during one day
-            displayDate =
-                moment
-                    .tz(event.start, event.timezone)
-                    .format(
-                        'dddd D MMMM YYYY [<span class="text-muted">from</span>] h:mm a',
-                    ) +
-                moment
-                    .tz(event.end, event.timezone)
-                    .format(
-                        ' [<span class="text-muted">to</span>] h:mm a [<span class="text-muted">](z)[</span>]',
-                    );
-        } else {
-            displayDate =
-                moment
-                    .tz(event.start, event.timezone)
-                    .format(
-                        'dddd D MMMM YYYY [<span class="text-muted">at</span>] h:mm a',
-                    ) +
-                moment
-                    .tz(event.end, event.timezone)
-                    .format(
-                        ' [<span class="text-muted">–</span>] dddd D MMMM YYYY [<span class="text-muted">at</span>] h:mm a [<span class="text-muted">](z)[</span>]',
-                    );
-        }
+        let displayDate = getDisplayDate(event);
         let eventStartISO = moment.tz(event.start, "Etc/UTC").toISOString();
         let eventEndISO = moment.tz(event.end, "Etc/UTC").toISOString();
         let parsedStart = moment
@@ -237,16 +284,34 @@ router.get("/:eventID", async (req: Request, res: Response) => {
             );
         }
         let editingEnabled = false;
-        if (Object.keys(req.query).length !== 0) {
-            if (!req.query.e) {
-                editingEnabled = false;
-                console.log("No edit token set");
-            } else {
-                if (req.query.e === eventEditToken) {
-                    editingEnabled = true;
-                } else {
-                    editingEnabled = false;
+        // First check if the edit token is present and valid
+        const hasValidEditToken = !!req.query.e && req.query.e === eventEditToken;
+        
+        if (hasValidEditToken) {
+            // If token is valid, check if phone verification is required by config
+            const config = getConfig();
+            if (config.twilio?.phone_verification_required) {
+                // If verification is required, check if the creator has verified their phone
+                // Also check for a valid verification token in cookies or header
+                const verificationToken = 
+                    req.cookies?.phone_verification || 
+                    req.headers['x-phone-verification'];
+                
+                if (verificationToken) {
+                    // Import tokenService dynamically to avoid circular dependencies
+                    const tokenService = await import('../lib/tokenService.js');
+                    
+                    // Get the verified phone from the token
+                    const verifiedPhone = tokenService.getVerifiedPhoneFromToken(verificationToken);
+                    
+                    // Enable editing only if verified phone matches creator phone
+                    if (verifiedPhone && verifiedPhone === event.creatorPhone) {
+                        editingEnabled = true;
+                    }
                 }
+            } else {
+                // If phone verification is not required, enable editing based on edit token only
+                editingEnabled = true;
             }
         }
         let eventAttendees = event.attendees
@@ -467,11 +532,33 @@ router.get("/group/:eventGroupID", async (req: Request, res: Response) => {
         }
 
         let editingEnabled = false;
-        if (Object.keys(req.query).length !== 0) {
-            if (!req.query.e) {
-                editingEnabled = false;
+        // Check if the edit token is present and valid
+        const hasValidEditToken = !!req.query.e && req.query.e === eventGroupEditToken;
+        
+        if (hasValidEditToken) {
+            // If token is valid, check if phone verification is required by config
+            const config = getConfig();
+            if (config.twilio?.phone_verification_required && eventGroup.creatorPhone) {
+                // If verification is required, check for a valid verification token in cookies or header
+                const verificationToken = 
+                    req.cookies?.phone_verification || 
+                    req.headers['x-phone-verification'];
+                
+                if (verificationToken) {
+                    // Import tokenService dynamically to avoid circular dependencies
+                    const tokenService = await import('../lib/tokenService.js');
+                    
+                    // Get the verified phone from the token
+                    const verifiedPhone = tokenService.getVerifiedPhoneFromToken(verificationToken);
+                    
+                    // Enable editing only if verified phone matches creator phone
+                    if (verifiedPhone && verifiedPhone === eventGroup.creatorPhone) {
+                        editingEnabled = true;
+                    }
+                }
             } else {
-                editingEnabled = req.query.e === eventGroupEditToken;
+                // If phone verification is not required, enable editing based on edit token only
+                editingEnabled = true;
             }
         }
 
