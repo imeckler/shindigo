@@ -287,33 +287,26 @@ router.get("/:eventID", async (req: Request, res: Response) => {
         // First check if the edit token is present and valid
         const hasValidEditToken = !!req.query.e && req.query.e === eventEditToken;
         
-        if (hasValidEditToken) {
-            // If token is valid, check if phone verification is required by config
-            const config = getConfig();
-            if (config.twilio?.phone_verification_required) {
-                // If verification is required, check if the creator has verified their phone
-                // Also check for a valid verification token in cookies or header
-                const verificationToken = 
-                    req.cookies?.phone_verification || 
-                    req.headers['x-phone-verification'];
-                
-                if (verificationToken) {
-                    // Import tokenService dynamically to avoid circular dependencies
-                    const tokenService = await import('../lib/tokenService.js');
-                    
-                    // Get the verified phone from the token
-                    const verifiedPhone = tokenService.getVerifiedPhoneFromToken(verificationToken);
-                    
-                    // Enable editing only if verified phone matches creator phone
-                    if (verifiedPhone && verifiedPhone === event.creatorPhone) {
-                        editingEnabled = true;
-                    }
-                }
-            } else {
-                // If phone verification is not required, enable editing based on edit token only
-                editingEnabled = true;
-            }
+        const config = getConfig();
+        if (config.twilio?.phone_verification_required) {
+          // unconditionally enable editing for creator
+          const verifiedUser = res.locals.verifiedUser;
+          if (!verifiedUser) {
+              return res.status(403).json({
+                  error: "User not found",
+                  requiresVerification: true
+              });
+          }
+          if (verifiedUser.phone === event.creatorPhone) {
+              editingEnabled = true;
+          }
+        } else {
+          if (hasValidEditToken) {
+            // If phone verification is not required, enable editing based on edit token only
+            editingEnabled = true;
+          }
         }
+
         let eventAttendees = event.attendees
             ?.sort((a, b) => (a.name > b.name ? 1 : b.name > a.name ? -1 : 0))
             .map((el) => {
