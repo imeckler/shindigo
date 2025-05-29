@@ -26,7 +26,10 @@ import crypto from "crypto";
 import ical from "ical";
 import { markdownToSanitizedHTML } from "../util/markdown.js";
 import { checkMagicLink, getConfigMiddleware } from "../lib/middleware.js";
+import { requirePhoneVerification } from "../lib/middleware/verificationCheck.js";
 import { getConfig } from "../lib/config.js";
+import { verifyPhoneVerificationToken } from "../lib/tokenService.js";
+import eventReminderService from "../lib/eventReminders.js";
 
 const config = getConfig();
 
@@ -78,6 +81,14 @@ router.post(
                 ],
             });
         }
+
+        if (!res.locals.verifiedUser) {
+            return res.status(403).json({
+                error: "User not found",
+                requiresVerification: true
+            });
+        }
+        const userRecord = res.locals.verifiedUser;
 
         const eventID = generateEventID();
         const editToken = generateEditToken();
@@ -137,6 +148,7 @@ router.post(
             description: eventData.eventDescription,
             image: eventImageFilename,
             creatorEmail: eventData.creatorEmail,
+            creatorPhone: userRecord.phone,
             url: eventData.eventURL,
             hostName: eventData.hostName,
             viewPassword: "", // Backwards compatibility
@@ -144,9 +156,9 @@ router.post(
             editToken: editToken,
             showOnPublicList: eventData?.publicBoolean,
             eventGroup: isPartOfEventGroup ? eventGroup?._id : null,
-            usersCanAttend: eventData.joinBoolean ? true : false,
+            usersCanAttend: true, // eventData.joinBoolean ? true : false,
             showUsersList: false, // Backwards compatibility
-            usersCanComment: eventData.interactionBoolean ? true : false,
+            usersCanComment: true, // eventData.interactionBoolean ? true : false,
             maxAttendees: eventData.maxAttendees,
             firstLoad: true,
             activityPubActor: createActivityPubActor(
@@ -191,6 +203,10 @@ router.post(
         try {
             const savedEvent = await event.save();
             addToLog("createEvent", "success", "Event " + eventID + "created");
+            
+            // Schedule reminder texts for the event
+            await eventReminderService.scheduleReminders(savedEvent);
+            
             // Send email with edit link
             if (eventData.creatorEmail) {
                 req.emailService.sendEmailFromTemplate({
@@ -203,6 +219,17 @@ router.post(
                     }
                 });
             }
+            
+            // Check if phone verification is required
+            if (config.twilio?.phone_verification_required) {
+                  // Return the normal response with the token
+                  return res.json({
+                      eventID: eventID,
+                      editToken: editToken,
+                      url: `/${eventID}?e=${editToken}`,
+                  });
+            }
+            
             // If the event was added to a group, send an email to any group
             // subscribers
             if (event.eventGroup) {
@@ -274,6 +301,7 @@ router.post(
 router.put(
     "/event/:eventID",
     upload.single("imageUpload"),
+    requirePhoneVerification,
     async (req: Request, res: Response) => {
         const { data: eventData, errors } = validateEventData(req.body);
         if (errors && errors.length > 0) {
@@ -439,6 +467,12 @@ router.put(
                 "success",
                 "Event " + req.params.eventID + " edited",
             );
+            
+            // Reschedule reminder texts if event date/time changed
+            if (event.start.getTime() !== updatedEventObject.start.getTime() || 
+                event.timezone !== updatedEventObject.timezone) {
+                await eventReminderService.scheduleReminders(updatedEventObject);
+            }
             // send update to ActivityPub subscribers
             const attendees = updatedEventObject.attendees?.filter((el) => el.id);
             // broadcast an identical message to all followers, will show in home timeline
@@ -629,6 +663,7 @@ router.post(
 
 router.delete(
     "/event/attendee/:eventID",
+    requirePhoneVerification,
     async (req: Request, res: Response) => {
         const removalPassword = req.query.p;
         if (!removalPassword) {
