@@ -1,4 +1,4 @@
-import moment from "moment-timezone";
+import moment, { Moment } from "moment-timezone";
 
 type Error = {
     message?: string;
@@ -26,6 +26,7 @@ interface EventData {
     imagePath: string;
     hostName: string;
     creatorEmail: string;
+    creatorPhone: string;
     publicCheckbox: string;
     eventGroupCheckbox: string;
     eventGroupID: string;
@@ -87,27 +88,27 @@ const validateUrl = (url: string) => {
     return validUrl.protocol === "http:" || validUrl.protocol === "https:";
 };
 
-export const validateEventTime = (start: Date, end: Date): Error | boolean => {
-    if (moment(start).isAfter(moment(end))) {
+export const validateEventTime = (start: Moment, end: Moment): Error | boolean => {
+    if (start.isAfter(end)) {
         return {
             message: "Start time must be before end time.",
             field: "eventStart",
         };
     }
-    if (moment(start).isBefore(moment())) {
+    if (start.isBefore(moment())) {
         return {
             message: "Start time must be in the future.",
             field: "eventStart",
         };
     }
-    if (moment(end).isBefore(moment())) {
+    if (end.isBefore(moment())) {
         return {
             message: "End time must be in the future.",
             field: "eventEnd",
         };
     }
     // Duration cannot be longer than 1 year
-    if (moment(end).diff(moment(start), "years") > 1) {
+    if (end.diff(start, "years") > 1) {
         return {
             message: "Event duration cannot be longer than 1 year.",
             field: "eventEnd",
@@ -152,19 +153,19 @@ export const validateEventData = (
             field: "eventEnd",
         });
     }
-    const timeValidation = validateEventTime(
-        new Date(validatedData.eventStart),
-        new Date(validatedData.eventEnd),
-    );
-    if (timeValidation !== true && timeValidation !== false) {
-        errors.push({
-            message: timeValidation.message,
-        });
-    }
     if (!validatedData.timezone) {
         errors.push({
             message: "Event timezone is required.",
             field: "timezone",
+        });
+    }
+    const timeValidation = validateEventTime(
+        moment.tz(validatedData.eventStart, validatedData.timezone),
+        moment.tz(validatedData.eventEnd, validatedData.timezone),
+    );
+    if (timeValidation !== true && timeValidation !== false) {
+        errors.push({
+            message: timeValidation.message,
         });
     }
     if (!validatedData.eventDescription) {
