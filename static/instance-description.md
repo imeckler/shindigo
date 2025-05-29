@@ -1,1 +1,3 @@
-**{{ siteName }}** is running on Gathio — a simple, federated, privacy-first event hosting platform.
+# Welcome to Gathio
+
+This is a locally hosted instance of Gathio, an open-source event organization platform.
