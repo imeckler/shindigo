@@ -1,4 +1,11 @@
 // User verification functionality
+function rememberEventForRsvp() {
+  const eventID = window.eventData && window.eventData.id;
+  if (eventID) {
+    sessionStorage.setItem('rsvpAfterSignIn', eventID);
+  }
+}
+
 $(document).ready(function() {
   // Show sign in modal when button is clicked
   $('.showVerificationModal').on('click', function() {
@@ -99,6 +106,9 @@ $(document).ready(function() {
         console.log('verify respj', response.newUser);
         localStorage.setItem('verified_user_phone', phone);
         localStorage.setItem('phone_verification_token', response.verificationToken);
+
+        // If we're on an event page, open the RSVP modal once the page reloads
+        rememberEventForRsvp();
 
         if (response.newUser) {
           $('#signInStep2').hide();

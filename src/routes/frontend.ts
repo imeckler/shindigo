@@ -361,6 +361,17 @@ router.get("/:eventID", async (req: Request, res: Response) => {
                 noMoreSpots = true;
             }
         }
+        // Has the signed-in user already RSVPed to this event?
+        const verifiedPhone = res.locals.verifiedUser?.phone;
+        const userIsAttending =
+            !!verifiedPhone &&
+            !!event.attendees?.some(
+                (a) =>
+                    a.status === "attending" && a.phoneNumber === verifiedPhone,
+            );
+        // Attendee info and discussion stay blurred until the user has RSVPed
+        // (the event organiser can always see them).
+        const canViewAttendees = editingEnabled || userIsAttending;
         let metadata = {
             title: event.name,
             description: (
@@ -397,6 +408,8 @@ router.get("/:eventID", async (req: Request, res: Response) => {
                 numberOfHiddenAttendees,
                 spotsRemaining: spotsRemaining,
                 noMoreSpots: noMoreSpots,
+                userIsAttending,
+                canViewAttendees,
                 eventStartISO: eventStartISO,
                 eventEndISO: eventEndISO,
                 parsedLocation: parsedLocation,
