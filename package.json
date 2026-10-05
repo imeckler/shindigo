@@ -67,5 +67,10 @@
         "eslint": "^8.57.0",
         "nodemon": "^2.0.22",
         "prettier": "^3.2.5"
+    },
+    "pnpm": {
+        "ignoredBuiltDependencies": [
+            "generate-rsa-keypair"
+        ]
     }
 }

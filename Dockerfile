@@ -4,7 +4,7 @@ FROM node:18-alpine AS BUILD_IMAGE
 WORKDIR /app
 RUN apk add --no-cache python3 build-base
 ADD package.json pnpm-lock.yaml /app/
-RUN npm install -g pnpm
+RUN npm install -g pnpm@10
 RUN pnpm install --prod
 COPY . /app/
 # Always exit 0 here because TSC will fail while we're migrating to TypeScript but
