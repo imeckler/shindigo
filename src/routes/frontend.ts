@@ -289,15 +289,10 @@ router.get("/:eventID", async (req: Request, res: Response) => {
         
         const config = getConfig();
         if (config.twilio?.phone_verification_required) {
-          // unconditionally enable editing for creator
+          // unconditionally enable editing for creator; anonymous visitors
+          // still get the (read-only) event page
           const verifiedUser = res.locals.verifiedUser;
-          if (!verifiedUser) {
-              return res.status(403).json({
-                  error: "User not found",
-                  requiresVerification: true
-              });
-          }
-          if (verifiedUser.phone === event.creatorPhone) {
+          if (verifiedUser && verifiedUser.phone === event.creatorPhone) {
               editingEnabled = true;
           }
         } else {
