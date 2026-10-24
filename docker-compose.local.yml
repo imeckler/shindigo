@@ -11,6 +11,10 @@ services:
             - mongo
         ports:
             - 3000:3000
+        environment:
+            # Comma-separated E.164 numbers of hosts allowed to text attendees.
+            # Set it in a .env file next to this compose file (not in git).
+            - TEXT_BLAST_ALLOWED_PHONES=${TEXT_BLAST_ALLOWED_PHONES:-}
         volumes:
             # The path to Gathio's config folder - change to match your system
             - ./gathio-docker/config:/app/config
