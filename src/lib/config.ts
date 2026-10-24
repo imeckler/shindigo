@@ -17,6 +17,9 @@ export interface TwilioConfig {
     messaging_service_sid: string;
     phone_number: string;
     phone_verification_required: boolean;
+    // Verified phone numbers of hosts who may send text blasts to attendees.
+    // Overridden by the TEXT_BLAST_ALLOWED_PHONES env var (comma-separated).
+    text_blast_allowed_phones?: string[];
 }
 
 export interface GathioConfig {

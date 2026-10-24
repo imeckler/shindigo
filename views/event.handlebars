@@ -186,6 +186,11 @@
     {{#if eventData.usersCanAttend}}
     <div class="card mb-4" id="eventAttendees">
       <h5 class="card-header">Attendees {{#if numberOfAttendees}}({{numberOfAttendees}}){{/if}}
+        {{#if textBlastEnabled}}
+          <div class="button--group" role="group" aria-label="Host controls">
+            <button type="button" id="textAttendees" class="button button--secondary" data-toggle="modal" data-target="#textBlastModal" {{#unless textBlastRecipientCount}}disabled title="No attendees have a phone number yet"{{/unless}}><i class="fas fa-sms"></i> Text attendees</button>
+          </div>
+        {{/if}}
         {{#unless editingEnabled}}
           {{#if userIsAttending}}
             <div class="button--group" role="group" aria-label="Attendance controls">
@@ -223,6 +228,46 @@
         {{/if}}
       </div>
     </div>
+
+      {{#if textBlastEnabled}}
+      <div class="modal fade" id="textBlastModal" tabindex="-1" role="dialog" aria-labelledby="textBlastModalLabel" aria-hidden="true">
+        <div class="modal-dialog" role="document">
+          <div class="modal-content">
+            <div class="modal-header">
+              <h5 class="modal-title" id="textBlastModalLabel">Text attendees of '{{eventData.name}}'</h5>
+              <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                <span aria-hidden="true">&times;</span>
+              </button>
+            </div>
+            <form id="textBlastForm">
+              <div class="modal-body">
+                <p>This will send an SMS to <strong id="textBlastRecipientCount">{{textBlastRecipientCount}}</strong> {{plural textBlastRecipientCount "attendee(s)"}} with a phone number on file. It can't be unsent.</p>
+                <div class="form-group">
+                  <label for="textBlastMessage">Message</label>
+                  <textarea class="form-control" id="textBlastMessage" name="message" rows="4" maxlength="{{textBlastMaxLength}}" placeholder="e.g. We're running 30 minutes late - see you soon!" required></textarea>
+                  <small class="form-text text-muted"><span id="textBlastCharCount">0</span>/{{textBlastMaxLength}} characters. Sent as: Message from the host of "{{eventData.name}}": &hellip;</small>
+                </div>
+                <div class="alert alert-danger" id="textBlastError" style="display:none;" role="alert"></div>
+                <div class="alert alert-success" id="textBlastSuccess" style="display:none;" role="alert"></div>
+                {{#if textBlasts.length}}
+                  <hr>
+                  <h6>Previous messages</h6>
+                  <ul class="list-unstyled mb-0" id="textBlastHistory">
+                    {{#each textBlasts}}
+                      <li class="mb-2"><small class="text-muted">{{this.sentAt}} &middot; sent to {{this.recipientCount}}{{#if this.failedCount}}, {{this.failedCount}} failed{{/if}}</small><br>{{this.message}}</li>
+                    {{/each}}
+                  </ul>
+                {{/if}}
+              </div>
+              <div class="modal-footer">
+                <button type="button" class="button button--secondary" data-dismiss="modal">Close</button>
+                <button type="submit" class="button button--primary" id="textBlastSend"><i class="fas fa-paper-plane"></i> Send text</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      </div>
+      {{/if}}
 
       {{#if editingEnabled}}
       <div class="modal fade" id="removeAttendeeModal" tabindex="-1" role="dialog" aria-labelledby="removeAttendeeModalLabel" aria-hidden="true">
@@ -460,6 +505,45 @@ window.eventData = {{{ json jsonData }}};
     modal.find('.modal-title').text('Remove ' + attendeeName + ' from {{eventData.name}}')
     modal.find('#removeAttendeeForm').attr('action', '/removeattendee/{{eventData.id}}/' + attendeeID);
   })
+  {{/if}}
+  {{#if textBlastEnabled}}
+  $('#textBlastMessage').on('input', function () {
+    $('#textBlastCharCount').text($(this).val().length);
+  });
+  $('#textBlastModal').on('show.bs.modal', function () {
+    $('#textBlastError, #textBlastSuccess').hide();
+  });
+  $('#textBlastForm').on('submit', function (e) {
+    e.preventDefault();
+    var message = $('#textBlastMessage').val().trim();
+    if (!message) { return; }
+    var count = $('#textBlastRecipientCount').text();
+    if (!confirm('Send this text to ' + count + ' attendee(s)?')) { return; }
+    var $btn = $('#textBlastSend').prop('disabled', true);
+    $('#textBlastError, #textBlastSuccess').hide();
+    fetch('/event/{{eventData.id}}/text-blast', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'same-origin',
+      body: JSON.stringify({ message: message })
+    })
+      .then(function (r) { return r.json().then(function (data) { return { ok: r.ok, data: data }; }); })
+      .then(function (res) {
+        if (!res.ok) {
+          throw new Error(res.data.error || 'Something went wrong.');
+        }
+        var text = 'Sent to ' + res.data.sent + ' attendee(s).';
+        if (res.data.failed) { text += ' ' + res.data.failed + ' could not be delivered.'; }
+        $('#textBlastSuccess').text(text).show();
+        $('#textBlastMessage').val('');
+        $('#textBlastCharCount').text('0');
+        setTimeout(function () { window.location.reload(); }, 1500);
+      })
+      .catch(function (err) {
+        $('#textBlastError').text(err.message).show();
+      })
+      .finally(function () { $btn.prop('disabled', false); });
+  });
   {{/if}}
   $(".commentTimestamp").html(function(){
     parsedDate = moment($(this).html()).fromNow();

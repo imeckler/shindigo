@@ -30,6 +30,13 @@ import { requirePhoneVerification } from "../lib/middleware/verificationCheck.js
 import { getConfig } from "../lib/config.js";
 import { verifyPhoneVerificationToken } from "../lib/tokenService.js";
 import eventReminderService from "../lib/eventReminders.js";
+import twilioService from "../lib/twilio.js";
+import {
+    TEXT_BLAST_MAX_LENGTH,
+    canSendTextBlast,
+    formatTextBlast,
+    textBlastRecipients,
+} from "../lib/textBlast.js";
 
 const config = getConfig();
 
@@ -656,6 +663,104 @@ router.post(
                         message: err,
                     },
                 ],
+            });
+        }
+    },
+);
+
+// Host sends an SMS to every attendee of the event.
+// Currently limited to hosts whose phone is on the text blast allowlist.
+router.post(
+    "/event/:eventID/text-blast",
+    async (req: Request, res: Response) => {
+        const verifiedPhone: string | undefined = res.locals.verifiedUser?.phone;
+        if (!verifiedPhone) {
+            return res.status(403).json({
+                error: "Phone verification required",
+                requiresVerification: true,
+            });
+        }
+        if (!canSendTextBlast(verifiedPhone)) {
+            return res.status(403).json({
+                error: "Text blasts are not enabled for your account.",
+            });
+        }
+        const message =
+            typeof req.body.message === "string" ? req.body.message.trim() : "";
+        if (!message) {
+            return res.status(400).json({ error: "Please enter a message." });
+        }
+        if (message.length > TEXT_BLAST_MAX_LENGTH) {
+            return res.status(400).json({
+                error: `Messages must be ${TEXT_BLAST_MAX_LENGTH} characters or fewer.`,
+            });
+        }
+        try {
+            const event = await Event.findOne({ id: req.params.eventID });
+            if (!event) {
+                return res.status(404).json({ error: "Event not found." });
+            }
+            if (!event.creatorPhone || event.creatorPhone !== verifiedPhone) {
+                return res.status(403).json({
+                    error: "Only the host of this event can text its attendees.",
+                });
+            }
+            if (!twilioService.isSmsEnabled()) {
+                return res.status(503).json({
+                    error: "Text messaging is not configured on this server.",
+                });
+            }
+            const recipients = textBlastRecipients(event);
+            if (recipients.length === 0) {
+                return res.status(400).json({
+                    error: "No attendees have a phone number to text.",
+                });
+            }
+
+            const body = formatTextBlast(event, message);
+            let sent = 0;
+            let failed = 0;
+            for (const phone of recipients) {
+                try {
+                    await twilioService.sendSms(phone, body);
+                    sent++;
+                } catch (e) {
+                    failed++;
+                    console.error(
+                        `Text blast for event ${event.id} failed for ${phone}:`,
+                        e,
+                    );
+                }
+            }
+
+            await Event.updateOne(
+                { id: event.id },
+                {
+                    $push: {
+                        textBlasts: {
+                            message,
+                            sentAt: new Date(),
+                            recipientCount: sent,
+                            failedCount: failed,
+                        },
+                    },
+                },
+            );
+            addToLog(
+                "textBlast",
+                failed ? "error" : "success",
+                `Host texted ${sent} attendee(s) of event ${event.id}` +
+                    (failed ? ` (${failed} failed)` : ""),
+            );
+            return res.json({ success: true, sent, failed });
+        } catch (e) {
+            addToLog(
+                "textBlast",
+                "error",
+                `Attempt to text attendees of event ${req.params.eventID} failed with error: ${e}`,
+            );
+            return res.status(500).json({
+                error: "There has been an unexpected error. Please try again.",
             });
         }
     },

@@ -46,6 +46,13 @@ export interface IActivityPubMessage {
     content?: string;
 }
 
+export interface ITextBlast {
+    message: string;
+    sentAt: Date;
+    recipientCount: number;
+    failedCount: number;
+}
+
 export interface IEvent extends mongoose.Document {
     id: string;
     type: string;
@@ -78,6 +85,7 @@ export interface IEvent extends mongoose.Document {
     followers?: IFollower[];
     activityPubMessages?: IActivityPubMessage[];
     showOnPublicList?: boolean;
+    textBlasts?: ITextBlast[];
 }
 
 const Attendees = new mongoose.Schema({
@@ -235,6 +243,26 @@ const CommentSchema = new mongoose.Schema({
     replies: [ReplySchema],
 });
 
+const TextBlastSchema = new mongoose.Schema({
+    message: {
+        type: String,
+        trim: true,
+        required: true,
+    },
+    sentAt: {
+        type: Date,
+        required: true,
+    },
+    recipientCount: {
+        type: Number,
+        default: 0,
+    },
+    failedCount: {
+        type: Number,
+        default: 0,
+    },
+});
+
 const EventSchema = new mongoose.Schema({
     id: {
         type: String,
@@ -359,6 +387,7 @@ const EventSchema = new mongoose.Schema({
         type: Boolean,
         default: false,
     },
+    textBlasts: [TextBlastSchema],
 });
 
 export default mongoose.model<IEvent>("Event", EventSchema);

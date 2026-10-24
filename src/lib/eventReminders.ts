@@ -144,30 +144,11 @@ class EventReminderService {
      */
     private async sendReminderText(phoneNumber: string, message: string): Promise<void> {
         try {
-            // Use the existing Twilio client from twilioService
-            const twilioClient = (twilioService as any).client;
-            const messagingServiceSid = (twilioService as any).messagingServiceSid;
-            const fromPhoneNumber = (twilioService as any).fromPhoneNumber;
-
-            if (!twilioClient) {
+            if (!twilioService.isSmsEnabled()) {
                 console.error('Twilio client not available for reminder');
                 return;
             }
-
-            if (messagingServiceSid) {
-                await twilioClient.messages.create({
-                    body: message,
-                    to: phoneNumber,
-                    messagingServiceSid: messagingServiceSid
-                });
-            } else {
-                await twilioClient.messages.create({
-                    body: message,
-                    to: phoneNumber,
-                    from: fromPhoneNumber
-                });
-            }
-
+            await twilioService.sendSms(phoneNumber, message);
             console.log(`Reminder sent to ${phoneNumber}`);
         } catch (error) {
             console.error('Error sending reminder text:', error);

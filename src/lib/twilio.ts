@@ -214,6 +214,38 @@ class TwilioService {
 
 
     /**
+     * Whether outbound SMS can be sent at all (Twilio configured with a
+     * messaging service or a from number).
+     */
+    isSmsEnabled(): boolean {
+        return this.isEnabled && !!this.client && !!(this.messagingServiceSid || this.fromPhoneNumber);
+    }
+
+    /**
+     * Sends a plain SMS. Throws if Twilio is not configured or the send fails.
+     * @param to The recipient phone number (E.164)
+     * @param body The message body
+     */
+    async sendSms(to: string, body: string): Promise<void> {
+        if (!this.client) {
+            throw new Error('Twilio is not configured; cannot send SMS.');
+        }
+        if (this.messagingServiceSid) {
+            await this.client.messages.create({
+                body,
+                to,
+                messagingServiceSid: this.messagingServiceSid,
+            });
+        } else {
+            await this.client.messages.create({
+                body,
+                to,
+                from: this.fromPhoneNumber,
+            });
+        }
+    }
+
+    /**
      * Checks if phone verification is required based on configuration
      * @returns boolean indicating if phone verification is required
      */

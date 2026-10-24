@@ -21,6 +21,11 @@ import { getConfigMiddleware } from "../lib/middleware.js";
 import { getMessage } from "../util/messages.js";
 import { EventListEvent, bucketEventsByMonth } from "../lib/event.js";
 import { getVerifiedPhoneFromRequest } from '../lib/tokenService.js';
+import {
+    TEXT_BLAST_MAX_LENGTH,
+    canSendTextBlast,
+    textBlastRecipients,
+} from "../lib/textBlast.js";
 
 const router = Router();
 
@@ -367,6 +372,24 @@ router.get("/:eventID", async (req: Request, res: Response) => {
         // Attendee info and discussion stay blurred until the user has RSVPed
         // (the event organiser can always see them).
         const canViewAttendees = editingEnabled || userIsAttending;
+        // Text blasts: host-only, and only for allowlisted hosts for now.
+        const textBlastEnabled =
+            editingEnabled && canSendTextBlast(verifiedPhone);
+        const textBlastRecipientCount = textBlastEnabled
+            ? textBlastRecipients(event).length
+            : 0;
+        const textBlasts = textBlastEnabled
+            ? [...(event.textBlasts || [])]
+                  .sort((a, b) => b.sentAt.getTime() - a.sentAt.getTime())
+                  .map((b) => ({
+                      message: b.message,
+                      recipientCount: b.recipientCount,
+                      failedCount: b.failedCount,
+                      sentAt: moment
+                          .tz(b.sentAt, event.timezone)
+                          .format("MMM D, YYYY h:mm A"),
+                  }))
+            : [];
         let metadata = {
             title: event.name,
             description: (
@@ -405,6 +428,10 @@ router.get("/:eventID", async (req: Request, res: Response) => {
                 noMoreSpots: noMoreSpots,
                 userIsAttending,
                 canViewAttendees,
+                textBlastEnabled,
+                textBlastRecipientCount,
+                textBlastMaxLength: TEXT_BLAST_MAX_LENGTH,
+                textBlasts,
                 eventStartISO: eventStartISO,
                 eventEndISO: eventEndISO,
                 parsedLocation: parsedLocation,
